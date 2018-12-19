@@ -1,0 +1,164 @@
+#!/usr/bin/python
+# _*_ coding: utf-8 _*_
+import ConfigParser
+import sys
+import commands
+import argparse
+
+configPath = "/etc/oclogin/config"
+ocPath = "/usr/bin/oc"
+
+#get the current configured envs
+def getEnvs():
+    conf = ConfigParser.RawConfigParser()
+    conf.read(configPath)
+    return conf.sections()
+
+def isEnvExsit(env):
+    conf = ConfigParser.RawConfigParser()
+    conf.read(configPath)
+    if conf.has_section(env):
+        return True
+    else:
+        return False
+   
+def getvalue(sections,option):
+    conf = ConfigParser.SafeConfigParser()
+    conf.read(configPath)
+    return conf.get(sections, option)
+
+def getURL(env):
+    return getvalue(env,"url")
+
+def getPwd(env):
+    return getvalue(env,"password")
+
+
+def login(args):
+    args_dict = vars(args)
+    env = args_dict['env']
+
+    if not isEnvExsit(env):
+        print 'env [%s] doesn\'t exsit' % env
+        print 'Avaliable ENVs: %s ' % getEnvs()
+        sys.exit(-1)
+
+    if env == "bj1" or env == "hk":
+        ocPath = "/usr/bin/oc35"
+
+    cmd = "%s login %s --username=admin --password=%s" %(ocPath, getURL(env), getPwd(env))
+    status,result = commands.getstatusoutput(cmd)
+    print result
+
+
+def add(args):
+    args_dict = vars(args)
+    name = args_dict['name']
+    url = args_dict['url']
+    username = args_dict['username']
+    password = args_dict['password']
+   
+    if isEnvExsit(name):
+        print 'env [%s] already exsit' % name 
+        sys.exit(-1)
+
+    conf = ConfigParser.SafeConfigParser()
+    conf.read(configPath)    
+    
+    conf.add_section(name)
+    conf.set(name,'url', url)
+    conf.set(name, 'username', username)
+    conf.set(name, 'password', password)
+    
+    try:
+        with open(configPath,'wb') as configfile:
+            conf.write(configfile)
+    except Exception,err:
+        print err
+    print 'env [%s] added successfully' % name
+
+def delete(args):
+    
+    conf = ConfigParser.SafeConfigParser()
+    conf.read(configPath)
+
+    args_dict = vars(args)
+    name = args_dict['name']
+    if isEnvExsit(name):
+        conf.remove_section(name)
+        try:
+            with open(configPath, 'wb') as configfile:
+                conf.write(configfile)
+        except Exception,error:
+            print err
+        print "Env [%s] deleted successfully" % name
+    else:
+        print "Env [%s] doesn't exsit" % name
+        sys.exit(-1)
+
+def edit(args):
+    conf = ConfigParser.SafeConfigParser()
+    conf.read(configPath)
+
+    args_dict = vars(args)
+    name = args_dict['name']
+    url = args_dict['url']
+    username = args_dict['username']
+    password = args_dict['password']
+    if isEnvExsit(name):
+        if url:
+            conf.set(name, 'url', url)
+        if username:
+            conf.set(name, 'username',username)
+        if password:
+            conf.set(name, 'password', password)
+        try:
+            with open(configPath, 'wb') as configfile:
+                conf.write(configfile)
+        except Exception,error:
+            print err
+        print "Env [%s] edited successfully" % name
+    else:
+        print "Env [%s] doesn't exsit" % name
+        sys.exit(-1)
+     
+
+    
+def main():
+    parser = argparse.ArgumentParser(description='Program to manage multiple Openshift Environment')
+    sub_parser = parser.add_subparsers(title='Openshift Environment related commands',
+                                       description='use follow sub command to manage different openshift environments',
+                                       help='use the sub command to manage the related openshift environment')
+                                              
+
+    login_parser = sub_parser.add_parser('login', help='login to the related env')
+    login_parser.add_argument('--env','-e',required=True, help='the name of the env added: %s ' % getEnvs())
+    login_parser.set_defaults(func=login)
+
+    
+    add_parser = sub_parser.add_parser('add',help='add the env and related info')
+    add_parser.add_argument('--name','-n',required=True,help='the name of the env to add')
+    add_parser.add_argument('--url','-u',required=True,help='the url of the env')
+    add_parser.add_argument('--username','-a',default='admin',help='the username to login')
+    add_parser.add_argument('--password','-p',required=True,help='the password to login')
+    add_parser.set_defaults(func=add)
+
+    
+    delete_parser = sub_parser.add_parser('delete', help='delete the env and related info')
+    delete_parser.add_argument('--name','-n',required=True,help='the env name to delete')
+    delete_parser.set_defaults(func=delete)
+
+    edit_parser = sub_parser.add_parser('edit', help='edit the env and related info')
+    edit_parser.add_argument('--name','-n',help='the name of the env to edit')
+    edit_parser.add_argument('--url','-u',help='the url of the env')
+    edit_parser.add_argument('--username','-a',help='the username to login')
+    edit_parser.add_argument('--password','-p',help='the password to login')
+    edit_parser.set_defaults(func=edit) 
+    
+    args= parser.parse_args()
+    args.func(args)
+
+
+
+if __name__ == '__main__':
+    main()
